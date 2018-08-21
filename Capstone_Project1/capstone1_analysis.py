@@ -458,6 +458,7 @@ from sklearn.model_selection import train_test_split
 # In[41]:
 
 
+# split data into training set and testing set 
 x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2)
 
 
@@ -477,6 +478,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 # In[43]:
 
 
+# train baseline model: linear regression
 model = linear_model.LinearRegression()
 model.fit(x_train, y_train)
 y_pred_lr = model.predict(x_test)
@@ -513,6 +515,7 @@ print ("number of iterations : %d"%cv_enet.n_iter_)
 # In[47]:
 
 
+# train elastic net model 
 net_model = ElasticNet(l1_ratio = cv_enet.l1_ratio_, alpha = cv_enet.alpha_, max_iter = cv_enet.n_iter_, fit_intercept = True, normalize = True)
 
 
@@ -604,6 +607,7 @@ feature_importance.sort_values().tail(10).plot(kind = 'barh', figsize = (20,8))
 # In[56]:
 
 
+# scatter plot 
 plt.scatter(np.log(y_test), np.log(y_pred_rf))
 plt.xlabel("True Values")
 plt.ylabel("Predictions")
@@ -629,6 +633,7 @@ print(y_train.shape)
 # In[59]:
 
 
+# train xgboosting regressor 
 params = {'min_child_weight':[4,5], 'gamma':[i/10.0 for i in range(3,6)],  'subsample':[i/10.0 for i in range(6,11)],
 'colsample_bytree':[i/10.0 for i in range(6,11)], 'max_depth': [2,3,4]}
 xgb = XGBRegressor(colsample_bytree=0.2, gamma=0.0, 
@@ -768,7 +773,6 @@ def get_train_test_per_model(clf, x_train, y_train, x_test):
 
 
 # train all models
-# Create our OOF train and test predictions. These base results will be used as new features
 rf_train_stack, rf_test_stack = get_train_test_per_model(rf, x_train, y_train, x_test) # Random Forest
 xgb_train_stack, xgb_test_stack = get_train_test_per_model(xgb,x_train, y_train, x_test) # Xgboost
 mlp_train_stack, mlp_test_stack = get_train_test_per_model(mlp, x_train, y_train, x_test) # Neural Netork 
@@ -786,6 +790,7 @@ predictions_train_stack = pd.DataFrame( {'RandomForest': rf_train_stack.ravel(),
 # In[75]:
 
 
+# referred from: https://www.kaggle.com/arthurtok/introduction-to-ensembling-stacking-in-python
 heatmap = [
     go.Heatmap(
         z= predictions_train_stack.astype(float).corr().values ,
