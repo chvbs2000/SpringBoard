@@ -999,3 +999,21 @@ plt.show()
 # Noted that stacking model was built based on the mean value from cross validation and the training set and testing set were resampled, it is unlikely that stacking model did not perform the best because of overfitting issue. Instead, it may be explained by the fact that the model may be suboptimal. It can be inferred that neural network performed the best because random forest regressor and xgboosting regressor did not fit to the optimal parameters, grid search can be implemented to get the optimal value and increase performace in stacking model. 
 # 
 # Also, noted that random forest regressor also outperformed xgbkosting regressor, it is very likely that xgboosting regressor did not for to the optimal values. It is also possible that neural newtwork may better predict numerical value compared to xgboosting and random forest in this case. For the future work, optimal parameters should be achieved. In addition to MSE and R-Squared, other analysis can be also conducted to accurately define what is the "best model".  
+
+# ## ## Linear Regression based on Most Important Features
+# 
+
+# Now we know whcih feaures are important for better predicting AMD, lets construct a linear regression model based on these features again.
+
+# In[180]:
+
+
+import statsmodels.api as sm
+
+model_lr_aah = sm.OLS(data_ca_drop_dummy["Average Medicare Difference"], data_ca_drop_dummy[['Average Medicare Payment Amount', 'Average Medicare Standardized Amount','HCPCS Description_Heart surgery procedure', 'HCPCS Description_Reshaping of skull bone defect']])
+result_lr = model_lr_aah.fit()
+display(result_lr.params)
+display(result_lr.summary())
+
+
+# The result from linear regression showed that R-Squared was 0.57, which has been significantly improved compared to baseline linear regression model in prediction. It showed that with 0.42 unit decrease in Average Medicare Payment Amount, 0.97 unit increase in Average Medicare Standardized Amount, 0.27 increase in HCPCS Description_Heart surgery procedure, and 0.11 increase in HCPCS Description_Reshaping of skull bone defect would result in 1 unit increase in AMD. Noted that reamining other factors the same, one unit increase in procedure of heart surgery procedure would result in more than three unit increase in AMD. Similarily, one unit increase in procedure of Reshaping of skull bone defect would result in approximately 10 unit increase in AMD. 
