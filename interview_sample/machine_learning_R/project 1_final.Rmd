@@ -1,0 +1,604 @@
+---
+title: "Project 1"
+output: html_document
+---
+This is proejct 1 one by Kai-yu Chen. GTID: 903233101
+
+Load data
+```{r}
+####=== load breast cancer data === ###
+#load package
+library(caret)
+library(C50)
+library(rpart)
+library(gmodels)
+library(kernlab)
+library(neuralnet)
+library(RSNNS)
+library(gbm)
+# data
+mydata <- read.csv("~/kchen360/cancerNor.csv", stringsAsFactors = FALSE)
+mydata$X = NULL
+mydata11 <- mydata #data for ann algorithm use
+mydata$Benign = NULL
+mydata$Malignant = NULL
+# change character to factor vaiables
+mydata <- as.data.frame(unclass(mydata))
+
+#####=== load white wine quality data ===#####
+#load data
+mydata2<- read.csv("~/kchen360/wineNor.csv", stringsAsFactors = FALSE)
+mydata22 <- read.csv("~/kchen360/wineNormal.csv", stringsAsFactors = FALSE) #data for ann use
+mydata22$X = NULL
+#delete irrelevent column
+mydata2$X = NULL
+mydata2$Bad = NULL
+mydata2$Excellent = NULL
+mydata2$Fair = NULL
+mydata2$Fantastic = NULL
+mydata2$Good = NULL
+mydata2$Nice = NULL
+mydata2$Worse = NULL
+
+# change character to factor vaiables
+mydata2 <- as.data.frame(unclass(mydata2))
+
+###----split breast cancer data into train data and test data ---####
+smp.size <- floor(0.7*nrow(mydata)) 
+# sampling reproducible
+set.seed(133)                     
+# sampling to build training data
+train.ind <- sample(seq_len(nrow(mydata)), smp.size)
+# create train/test data set
+train <- mydata[train.ind, ]
+test <- mydata[-train.ind, ]
+
+
+#spliting white wine quality data
+set.seed(57)
+id.train2 <- createDataPartition(mydata2$quality, p = 0.7, list = FALSE) # 70% as training dataset
+train2 <- mydata2[id.train2,] 
+test2 <- mydata2[-id.train2,]
+
+```
+
+Decision Tree
+```{r}
+############### breast cancer diagnosis ###############
+#load package
+library(caret)
+library(rpart)
+library(gmodels)
+library(rpart.plot)
+
+train_control <- trainControl(method = "repeatedcv",   # Use repeated cross validation
+                              number = 10,             # Use 10 partitions
+                              repeats = 10)            # Repeat 10 times
+
+# Set required parameters for the model type we are using**
+tune_grid = expand.grid(cp=c(0.001))  #tune cp value    
+
+
+# Use the train() function to create the model
+
+validate_tree <- train(Diagnosis ~ .,
+                        data=train,                 # Data set
+                        method="rpart",                     # Model type(decision tree)
+                        trControl= train_control,           # Model control options
+                        tuneGrid = tune_grid,               # complex parameter
+                        maxdepth = 5,                       # Tree depth 
+                        minsplit = 2,                       # Min observations exist in a node
+                        minbucket = 1)                      # Min data in a node  
+
+validate_tree                                       # View a summary of the model
+p <- predict(validate_tree, test)                   # Apply model to test dataset
+
+#Get the confusion matrix to see accuracy value and other parameter values
+confusionMatrix(p, test$Diagnosis)
+
+
+# use rpart() to build another tree model
+cart.tree1 <- rpart( Diagnosis ~., data = train, 
+                     method = "class",  # this dat belongs to classification question
+                     minbucket = 1, 
+                     maxdepth = 5,
+                     minsplit = 2
+                     )
+
+#ckeck minimal cp
+plotcp(cart.tree1)
+#plot tree model
+plot(cart.tree1)
+text(cart.tree1, pretty = 0)
+rpart.plot(cart.tree1, type = 1, extra = 104)
+
+
+############  white wine quality prediction #################
+
+set.seed(784)
+tune_grid = expand.grid(cp=c(0.002))
+tree2 <- train(quality ~ .,
+                       data=train2,                         # Data set
+                       method="rpart",                     # Model type(decision tree)
+                       trControl= train_control,           # Model control options
+                       tuneGrid = tune_grid,               # complex parameter
+                       maxdepth = 5,                       # Tree depth 
+                       minsplit = 3,                       # Min observations exist in a node
+                       minbucket = 3)                      # Min data in a node  
+
+tree2                                               # View a summary of the model
+p2 <- predict(tree2, test2)                   # Apply model to test dataset
+
+#Get the confusion matrix to see accuracy value and other parameter values
+confusionMatrix(p2, test2$quality)
+
+# use rpart() to build another tree model
+cart.tree2 <- rpart( quality ~., data = train2, method = "class", minbucket = 3, minsplit = 3, cp = 0.002, maxdepth = 5)
+#check minimal cp
+plotcp(cart.tree2)
+#plot tree model
+library(rpart.plot)
+plot(cart.tree2)
+text(cart.tree2, pretty = 0)
+rpart.plot(cart.tree2, type = 1, extra = 104)
+
+```
+
+SVM
+```{r}
+############# breast cancer diagnosis ###############
+#Divide data to x (containt the all features) and y only the classes
+x <- subset(mydata, select=-Diagnosis)
+y <- Diagnosis
+
+#svm model with linear kernal 
+cancer_svmclassifier <- ksvm(Diagnosis ~ ., data = train, 
+                            kernal = "vanilladot", #kernel
+                            C = c(0.001),      #cost
+                            kpar = "automatic")    #optimal sigma
+cancer_svmclassifier 
+
+#svm prediction 
+cancer_svmprediction <- predict(cancer_svmclassifier, test)
+
+#accuracy
+confuse_table <- table(cancer_svmprediction, test$Diagnosis)
+sum(diag(confuse_table))/sum(confuse_table) 
+
+#svm model with Gaussian RBF kernal 
+cancer_svmclassifier2 <- ksvm(Diagnosis ~ ., data = train, 
+                              kernal = "rbfdot",
+                              C = c(1),      #cost
+                              kpar = "automatic" #optimal sigma
+                              )
+cancer_svmclassifier2 
+
+#svm prediction 
+cancer_svmprediction2 <- predict(cancer_svmclassifier2, test)
+
+############  white wine quality prediction #################
+#svm model with linear kernal 
+wine_svmclassifier <- ksvm(quality ~ ., data = train2, 
+                           kernal = "vanilladot",   #kernel
+                           C = c(60),               #cost
+                           kpar = "automatic"
+                           )
+wine_svmclassifier 
+
+#svm prediction 
+wine_svmprediction <- predict(wine_svmclassifier, test2)
+
+#accuracy
+smvtable2 <- table(wine_svmprediction, test2$quality)
+sum(diag(smvtable2))/sum(smvtable2) 
+
+#svm model with Gaussian RBF kernal 
+wine_svmclassifier2 <- ksvm(quality ~ ., data = train2, 
+                            kernal = "rbfdot", 
+                            C = c(40),               #cost
+                            kpar = "automatic"
+                            )
+wine_svmclassifier2 
+
+#svm prediction 
+wine_svmprediction2 <- predict(wine_svmclassifier2, test2)
+
+#accuracy
+smvtable2_g <- table(wine_svmprediction2, test2$quality)
+sum(diag(smvtable2_g))/sum(smvtable2_g) 
+
+#svm model with sigmoid kernal 
+wine_svmclassifier3 <- ksvm(quality ~ ., data = train2, 
+                            kernal = "tanhdot",
+                            C = c(10),               #cost
+                            kpar = "automatic"
+                            )
+wine_svmclassifier3 
+
+#svm prediction 
+wine_svmprediction3 <- predict(wine_svmclassifier3, test2)
+
+#accuracy
+smvtable2_s <- table(wine_svmprediction3, test2$quality)
+sum(diag(smvtable2_s))/sum(smvtable2_s)
+
+```
+Boosting 
+```{r}
+############# breast cancer diagnosis ###############
+
+# c50 model
+cancer.treec50 <- C5.0(train[-6],train$Diagnosis)
+cancer.treec50
+# evaluate weak learner
+summary(cancer.treec50)
+#tree model
+cancer.predc50 <- predict(cancer.treec50, test)
+tablec50 <- table(cancer.predc50, test$Diagnosis)
+sum(diag(tablec50))/sum(tablec50) 
+
+#adaptive boosting, 30 iterations 
+cancer.boost <-C5.0(train[-6],train$Diagnosis, trials = 20)
+
+#evaluate boosting learner
+summary(cancer.boost)
+
+#evaluate boosting
+cancer.predboost <- predict(cancer.boost, test)
+
+#evaulate bossting with testing data
+tablebo <- table(cancer.predboost, test$Diagnosis)
+sum(diag(tablebo))/sum(tablebo) 
+
+table.boost <- CrossTable(test$Diagnosis, cancer.predboost,
+                          prop.chisq = FALSE, 
+                          prop.c = FALSE, 
+                          prop.r = FALSE, 
+                          dnn = c('acutal default', 'predicted default') ) 
+# boosting cannot take categorical variable
+# load nemric y varibale data  
+
+mydataboo <- read.csv("~/kchen360/10cancer.csv", stringsAsFactors = FALSE)
+mydataboo$X = NULL
+
+#resplit a data 
+booid <- createDataPartition(mydata$Diagnosis, p = 0.7, list = FALSE) # 70% as training dataset
+train.boo <- mydataboo[booid,]
+test.boo <- mydataboo[-booid,]
+
+formula.cancer.boo = Diagnosis ~ Mean.Concave.Points + Worst.Concave.Points + Worst.Area + Worst.Radius + Worst.Perimeter
+
+## plot boosting 
+set.seed(173)
+fitControl <- trainControl(method = 'repeatedcv', number = 10, summaryFunction=defaultSummary)
+Grid <- expand.grid( n.trees = seq(1,100,5), interaction.depth = c(20), shrinkage = c(0.1), n.minobsinnode = 2)
+fit.gbm <- train(formula.cancer.boo, data=train.boo, method = 'gbm', trControl=fitControl,tuneGrid=Grid,metric='RMSE',maximize=FALSE)
+plot(fit.gbm, main=" Breast Cancer Diagnosis Boosting")
+
+
+############# white wine quality predction ###############
+# c50 model
+wine.treec50 <- C5.0(train2[-7],train2$quality)
+wine.treec50
+# evaluate weak learner
+summary(wine.treec50)
+#tree model
+wine.predc50 <- predict(wine.treec50, test2)
+table.c502 <- table(wine.predc50, test2$quality)
+sum(diag(table.c502))/sum(table.c502) 
+
+#adaptive boosting
+wine.boost <-C5.0(train2[-7],train2$quality, 
+                  trials = 60 #boost iterations
+                  )
+wine.boost
+summary(wine.boost)
+
+#evaluate boosting
+wine.pred.boost <- predict(wine.boost, test2)
+
+#evaulate bossting with testing data
+table.bo2 <- table(wine.pred.boost, test2$quality)
+sum(diag(table.bo2))/sum(table.bo2)
+table.boost2 <- CrossTable(test2$quality, wine.pred.boost,
+                          prop.chisq = FALSE, 
+                          prop.c = FALSE, 
+                          prop.r = FALSE, 
+                          dnn = c('acutal default', 'predicted default') ) 
+#data for plottign boosting
+mydata2boo <- read.csv("/~/kchen360/wineNormal.csv", stringsAsFactors = FALSE)
+mydata2boo$X = NULL
+
+#resplit a data 
+booid <- createDataPartition(mydata$Diagnosis, p = 0.7, list = FALSE) # 70% as training dataset
+train.boo2 <- mydata2boo[booid,]
+test.boo2 <- mydata2boo[-booid,]
+set.seed(10003)
+fitControl <- trainControl(method = 'repeatedcv', number = 10, summaryFunction=defaultSummary)
+Grid <- expand.grid( n.trees = seq(1,100,5), interaction.depth = c(20), shrinkage = c(0.1), n.minobsinnode = 2)
+fit.gbm <- train(quality~., data=train.boo2, method = 'gbm', trControl=fitControl,tuneGrid=Grid,metric='RMSE',maximize=FALSE)
+plot(fit.gbm, main="Wine Quality Boosting" )
+
+```
+
+
+kNN
+```{r}
+################### breast cancer diagnosis ###############
+set.seed(400)
+ctrl_knn <- trainControl(method="repeatedcv",repeats = 10) #,classProbs=TRUE,summaryFunction = twoClassSummary)
+knnFit_cancer <- train(Diagnosis ~ ., data = train, 
+                       method = "knn",                 #knn
+                       trControl = ctrl_knn,           
+                       tuneGrid = expand.grid(k = 40), # k value
+                       tuneLength = 20)                #number of tuning parameter generated      
+
+#Output of kNN fit
+knnFit_cancer
+
+#evaluate prediction
+knnPredict <- predict(knnFit_cancer,newdata = test)
+knnPredict_train <- predict(knnFit_cancer,newdata = train)
+#Get the confusion matrix to see accuracy value and other parameter values
+confusionMatrix(knnPredict, test$Diagnosis)
+
+
+##################### white wine quality prediction ################
+
+ctrl_knn2 <- trainControl(method="repeatedcv",repeats = 10) #,classProbs=TRUE,summaryFunction = twoClassSummary)
+tune_knn = expand.grid(k = 70) #k value
+knnFit_wine <- train(quality ~ ., data = train2, 
+                     method = "knn", 
+                     trControl = ctrl_knn2, 
+                     #tuneGrid = tune_knn, 
+                     tuneLength = 30)
+
+#Output of kNN fit
+knnFit_wine
+
+#Plotting yields Number of Neighbours Vs accuracy (based on repeated cross validation)
+plot(knnFit_wine)
+
+#evaluate prediction by tesing data set
+knnPredict_wine <- predict(knnFit_wine,newdata = test2 )
+knnPredict_train_wine <- predict(knnFit_wine,newdata = train2 )
+#Get the confusion matrix to see accuracy value and other parameter values
+confusionMatrix(knnPredict_wine, test2$quality)
+table_knn_w <- table(knnPredict_wine, test2$quality)
+sum(diag(table_knn_w))/sum(table_knn_w) 
+
+
+
+```
+
+ANN
+```{r}
+############## breast cancer diagnosis classifier ################# 
+
+# random sampling from 70% of the data to build training data
+ann.size <- floor(0.7*nrow(mydata11)) 
+# sampling reproducible
+set.seed(133)                     
+# sampling to build training data
+train.indnn <- sample(seq_len(nrow(mydata11)), ann.size)
+# create train/test data set
+train.nn <- mydata11[train.indnn, ]
+test.nn <- mydata11[-train.indnn, ]
+
+formula.cancer = Benign + Malignant ~ Mean.Concave.Points + Worst.Concave.Points + Worst.Area + Worst.Radius + Worst.Perimeter
+
+# train model
+model <- train(form=formula.cancer,     # formula
+               data=train.nn,           # data
+               method="neuralnet",   # ANN(bpn)
+               # combinations from different hidden layers (number of hidden layers) and numbers of nodes
+               tuneGrid = expand.grid(.layer1=c(1:4), .layer2=c(0:4), .layer3=c(0)),               
+               
+               learningrate = 0.5,  # learning rate
+               threshold = 0.5,     # partial derivatives of the error function, a stopping criteria
+               stepmax = 5e5         # max iterations = 500000(5*10^5)
+)
+
+#plot model
+plot(model)
+
+#build model by neuralnet()
+bpn2 <- neuralnet(formula = formula.cancer, 
+                  data = train.nn,
+                  hidden = c(4,1),     #  2 hidden layer, with 1 node in each hidden layer  
+                  learningrate = 0.01, # learning rate
+                  threshold = 0.01,    # partial derivatives of the error function, a stopping criteria
+                  stepmax = 5e5        # max iterations = 500000(5*10^5)
+                  
+)
+
+plot(bpn2)
+
+# use bpn model to test data set to predict
+# test set only include input nodes
+# get the first 5 columns for prediction
+pred.nn <- compute(bpn2, test.nn[, c(1:5)])  
+
+# prediciton result
+pred.nn$net.result
+# round results to 0/1
+pred.result <- round(pred.nn$net.result)
+# convert the result to a dataframe
+pred.result <- as.data.frame(pred.result)
+# contruct a new column called Diagnosis
+pred.result$Diagnosis <- ""
+
+# convert prediction results back to Disgnosis type
+for(i in 1:nrow(pred.result)){
+  if(pred.result[i, 1]==1){ pred.result[i, "Diagnosis"] <- "Benign"}
+  if(pred.result[i, 2]==1){ pred.result[i, "Diagnosis"] <- "Malignant"}
+}
+
+pred.result
+
+# confusion matrix to get accuracy
+confus.matrix.nn <- table(real = test.nn$Diagnosis, predict = pred.result$Diagnosis)
+sum(diag(confus.matrix.nn))/sum(confus.matrix.nn)
+
+
+################ white wine quality classifier ##############
+# random sampling from 70% of the data to build training data
+smp.size22 <- floor(0.7*nrow(mydata22)) 
+# sampling reproducible
+set.seed(1245)                     
+# sampling to build training data
+train22.ind <- sample(seq_len(nrow(mydata22)), smp.size22)
+# create training and testing data set
+train22 <- mydata22[train22.ind, ]
+test22 <- mydata22[-train22.ind, ]
+
+numFolds <- trainControl(method = 'repeatedcv', number = 10, classProbs = TRUE, verboseIter = TRUE, summaryFunction = twoClassSummary, preProcOptions = list(thresh = 0.75, ICAcomp = 3, k = 5))
+
+#create model using backpropagation method
+model2 <- train(form=quality~.,     # formula
+               data=train22,           # data
+               method="neuralnet",   # ANN(bpn)
+               # critical???observe different combination( the first layer 1~4 nodes ; the second 0~4 nodes)
+               # combinations from different hidden layers (number of hidden layers) and numbers of nodes
+               tuneGrid = expand.grid(.layer1=c(1:4), .layer2=c(0:4), .layer3=c(0)),
+               
+               # parameter setting up
+               learningrate = 0.5,  # learning rate
+               threshold = 0.5,     # partial derivatives of the error function, a stopping criteria
+               stepmax = 5e5         # max iterations = 500000(5*10^5)
+)
+
+# the model shows the best combination (# hidden layers, # nodes)
+model2
+
+plot(model2)
+
+formula2 = quality ~ alcohol + pH + citric.acid + free.sulfur.dioxide + total.sulfur.dioxide + residual.sugar 
+bpn <- neuralnet(formula = formula2, 
+                  data = train22,
+                  hidden = c(4,2),   # 2 hidden layer, with 4 node in the first layer and 2 modes in second layer  
+                  learningrate = 0.5, # learning rate
+                  threshold = 0.5,    # partial derivatives of the error function, a stopping criteria
+                  stepmax = 5e5        # maxierations = 500000(5*10^5)
+                  
+)
+
+plot(bpn)
+
+#prediction on test dataset
+nnmodel.prediction <- compute(bpn, test22[,1:6])
+
+#get predicted value from the model
+model.result <- nnmodel.prediction$net.result
+
+#obtain correlation between predicted model and test data
+cor(model.result, test22$quality)
+
+#plot iteraitons vs error 
+#slow leanring rate 
+mod3_low_lr<-mlp(train2[-7], train2$quality, size = 4, learnFuncParams = c(0.01), maxit = 10000, inputsTest = test2[-7], targetsTest = test2$quality, linOut=TRUE)
+#quick learning rate
+mod3_mid_lr<-mlp(train2[-7], train2$quality, size = 4, learnFuncParams = c(0.1), maxit = 10000, inputsTest = test2[-7], targetsTest = test2$quality, linOut=TRUE)
+
+#plot 
+plotIterativeError(mod3_low_lr)
+plotIterativeError(mod3_mid_lr)
+
+
+
+
+```
+
+plot training error and testing error based on training size
+```{r}
+################# breast cancer diagnosis ###################
+# training error function 
+train_error <- function (k, myfile,mymodel){
+  set.seed(167)         # data reproducible            
+  data = myfile         #data
+  smp.size <- floor(0.01*k*nrow(data))                  #training data size
+  train.ind <- sample(seq_len(nrow(data)), smp.size)
+  train <- data[train.ind, ]                            #training data
+  train.y <-data[,6]                                    #training data dependant vairable
+  model = mymodel                                       #training model
+  p <- predict(model, train)                            #predictive model
+  train.error <- mean(p != train.y)                     #training error
+  return(train.error)
+}
+
+test_error <- function (k, myfile,mymodel){
+  data = myfile                                      #data
+  smp.size <- floor(0.01*k*nrow(data))               #training data size
+  set.seed(10877)                                    #reproducible
+  train.ind <- sample(seq_len(nrow(data)), smp.size) #sampling
+  test <- data[-train.ind, ]                         #testing data
+  test.y <- data[,6]                                 #dependent variable in test data
+  model = mymodel                                    #training model
+  p <- predict(model, test)                          #predictive model
+  test.error <- mean(p != test.y)                    #testing error
+  return(test.error)
+}
+
+#training size starts from 10% to 100% of the data
+train.size <- seq(10, 100, by = 2)
+train_error_tree_vector <- sapply(train.size, function(x) train_error(x,mydata,validate_tree)) #decision tree train error
+test_error_tree_vector <- sapply(train.size, function(x) test_error(x,mydata,validate_tree))   #decision tree test error 
+train_error_vector_knn <- sapply(train.size, function(x) train_error(x,mydata,knnFit_cancer)) #knn train error
+test_error_vector_knn <- sapply(train.size, function(x) test_error(x,mydata,knnFit_cancer))   #knn test error
+
+# plot training error and testing error
+plot(train.size, train_error_tree_vector, main="Decision Tree Learning Curve in Breast Cancer Classification", 
+     xlab="Trainging size (%)", ylab=" Error", pch=10)
+lines(lowess(train.size,train_error_tree_vector, f = 0.7), lwd = 6, col="blue")
+lines(lowess(train.size,test_error_tree_vector, f = 0.75), lwd = 6,  lty = 3, col="blue")
+lines(lowess(train.size,train_error_vector_knn, f = 0.7), lwd = 6, col="red")
+lines(lowess(train.size,test_error_vector_knn, f = 0.35), lwd = 6, lty = 3, col="red")
+
+################## white wine quality prediciton #################
+train_error2 <- function (k, myfile,mymodel){
+  set.seed(1909)                     
+  data = myfile
+  smp.size <- floor(0.01*k*nrow(data)) 
+  train.ind <- sample(seq_len(nrow(data)), smp.size)
+  train <- data[train.ind, ]
+  train.y <-data[,7]
+  model = mymodel
+  p <- predict(model, train)
+  train.error <- mean(p != train.y)
+  return(train.error)
+}
+
+test_error2 <- function (k, myfile,mymodel){
+  data = myfile
+  smp.size <- floor(0.01*k*nrow(data)) 
+  set.seed(1327)                     
+  train.ind <- sample(seq_len(nrow(data)), smp.size)
+  test <- data[-train.ind, ]
+  test.y <-data[,7]
+  model = mymodel
+  p <- predict(model, test)
+  test.error <- mean(p != test.y)
+  return(test.error)
+}
+
+
+train.size2 <- seq(50, 100, by = 1)
+train_error_tree_vector2 <- sapply(train.size2, function(x) train_error2(x,mydata2,tree2))# decision tree train error
+test_error_tree_vector2 <- sapply(train.size2, function(x) test_error2(x,mydata2,tree2))#decision tree test error
+train_error_knn_vector2 <- sapply(train.size2, function(x) train_error(x, mydata2, knnFit_wine)) # knn train
+test_error_knn_vector2 <- sapply(train.size2, function(x) test_error(x, mydata2, knnFit_wine)) # knn test
+
+# plot training error and testing error
+#decision tree
+plot(train.size2, train_error_tree_vector2, main="Decision Tree Learning Curve in Wine Quality Classification", 
+     xlab="Trainging size (%)", ylab=" Error", pch=10)
+lines(lowess(train.size2,train_error_tree_vector2, f = 0.7), lwd = 6, col="blue")
+lines(lowess(train.size2,test_error_tree_vector2, f = 0.2), lwd = 4, col="red")
+
+#knn
+plot(train.size2, train_error_knn_vector2, main="kNN Learning Curve in Wine Quality Classification", 
+     xlab="Trainging size (%)", ylab=" Error", pch=10)
+lines(lowess(train.size2,train_error_knn_vector2, f = 0.7), lwd = 6, col="blue")
+lines(lowess(train.size2,test_error_knn_vector2, f = 0.35), lwd = 3, lty = 3, col="red")
+
+```
